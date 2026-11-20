@@ -1,5 +1,8 @@
 # Autonomous Deep Research Agent
 
+[![CI](https://github.com/r3kt003-web/rabbit-hole/actions/workflows/ci.yml/badge.svg)](https://github.com/r3kt003-web/rabbit-hole/actions/workflows/ci.yml)
+[![Python 3.11 | 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.13-blue.svg)](https://www.python.org/)
+
 A portfolio-grade **Autonomous Deep Research Agent** built with **LangGraph**, **Google Gemini**, **Serper**, **trafilatura**, **FastAPI**, and **Streamlit**.
 
 Given a research prompt, the agent autonomously plans sub-questions, executes parallel web researchers, extracts grounded findings, synthesizes a structured report with inline citations (`[1]`, `[2]`), runs a **deterministic citation verifier** against cached source text, and evaluates the draft with an LLM evaluator—triggering conditional revision loops if quality criteria are not satisfied.
@@ -300,7 +303,9 @@ streamlit run research_agent/ui/app.py
 
 ### 4. Running Tests & Linters
 
-Run the test suite:
+The test suite and code quality checks run automatically on GitHub Actions CI across both **Python 3.11** and **Python 3.13** on every push and pull request to `main`.
+
+Run the offline test suite locally:
 ```bash
 pytest
 ```
