@@ -1,4 +1,12 @@
-from research_agent.config.settings import Settings, get_settings
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from research_agent.config.settings import (
+    Settings,
+    get_settings,
+    validate_configured_models,
+)
 
 
 def test_settings_defaults(monkeypatch):
@@ -37,3 +45,64 @@ def test_pricing_file_exists():
     assert settings.pricing_file.exists(), (
         f"Pricing file does not exist at {settings.pricing_file}"
     )
+
+
+def test_validate_configured_models_skips_when_empty_key():
+    settings = Settings(google_api_key="")
+    assert validate_configured_models(settings) == []
+
+
+def test_validate_configured_models_success():
+    settings = Settings(
+        google_api_key="valid_test_api_key",
+        planner_model="gemini-2.5-flash",
+        researcher_model="gemini-2.5-flash-lite",
+        writer_model="gemini-2.5-flash",
+        evaluator_model="gemini-2.5-flash",
+    )
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "models": [
+            {
+                "name": "models/gemini-2.5-flash",
+                "supportedGenerationMethods": ["generateContent"],
+            },
+            {
+                "name": "models/gemini-2.5-flash-lite",
+                "supportedGenerationMethods": ["generateContent"],
+            },
+        ]
+    }
+    with patch("httpx.get", return_value=mock_resp):
+        res = validate_configured_models(settings)
+        assert "gemini-2.5-flash" in res
+        assert "gemini-2.5-flash-lite" in res
+
+
+def test_validate_configured_models_raises_on_missing_model():
+    settings = Settings(
+        google_api_key="valid_test_api_key",
+        planner_model="gemini-2.0-flash",  # deprecated/missing model
+        researcher_model="gemini-2.5-flash-lite",
+        writer_model="gemini-2.5-flash",
+        evaluator_model="gemini-2.5-flash",
+    )
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "models": [
+            {
+                "name": "models/gemini-2.5-flash",
+                "supportedGenerationMethods": ["generateContent"],
+            },
+            {
+                "name": "models/gemini-2.5-flash-lite",
+                "supportedGenerationMethods": ["generateContent"],
+            },
+        ]
+    }
+    with patch("httpx.get", return_value=mock_resp), pytest.raises(
+        ValueError, match="is unavailable for your Gemini API key"
+    ):
+        validate_configured_models(settings)

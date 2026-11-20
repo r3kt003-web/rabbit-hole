@@ -1,8 +1,12 @@
+import logging
 import os
 from pathlib import Path
 
+import httpx
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables from .env if present
 load_dotenv(override=False)
@@ -102,3 +106,55 @@ def reload_settings() -> Settings:
     load_dotenv(override=True)
     _settings_instance = Settings()
     return _settings_instance
+
+
+def validate_configured_models(settings: Settings | None = None) -> list[str]:
+    """Validates that configured model names exist in the Google Gemini API for the current key.
+
+    Fails fast with a clear ValueError if a model is unavailable.
+    """
+    settings = settings or get_settings()
+    api_key = settings.google_api_key
+
+    # Skip validation if key is missing, empty, or mock/test key
+    if not api_key or api_key.startswith("mock") or api_key == "test_key":
+        return []
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+    try:
+        response = httpx.get(url, timeout=10.0)
+        if response.status_code == 200:
+            data = response.json()
+            models = data.get("models", [])
+            available = set()
+            for m in models:
+                if "generateContent" in m.get("supportedGenerationMethods", []):
+                    name = m.get("name", "").removeprefix("models/")
+                    available.add(name)
+
+            configured = {
+                "PLANNER_MODEL": settings.planner_model,
+                "RESEARCHER_MODEL": settings.researcher_model,
+                "WRITER_MODEL": settings.writer_model,
+                "EVALUATOR_MODEL": settings.evaluator_model,
+            }
+
+            for env_var, model_name in configured.items():
+                clean_name = model_name.removeprefix("models/")
+                if clean_name not in available:
+                    sample = ", ".join(sorted(available)[:6])
+                    raise ValueError(
+                        f"Configured model '{model_name}' ({env_var}) is unavailable for your Gemini API key. "
+                        f"Available models supporting content generation include: {sample}... "
+                        f"Please update {env_var} in your .env file or run scripts/check_models.py."
+                    )
+            return sorted(available)
+        elif response.status_code in (400, 403):
+            raise ValueError(
+                f"Failed to authenticate with Google Gemini API ({response.status_code}): {response.text}"
+            )
+    except httpx.RequestError as exc:
+        logger.warning(
+            f"Could not reach Google Gemini API for model validation (offline/network error): {exc}"
+        )
+    return []

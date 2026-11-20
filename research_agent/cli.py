@@ -7,6 +7,10 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 
+from research_agent.config.settings import (
+    get_settings,
+    validate_configured_models,
+)
 from research_agent.observability.metrics import RunMetrics
 from research_agent.observability.tracer import Span, format_span_tree
 from research_agent.service.runner import ResearchOptions, run_research
@@ -48,6 +52,18 @@ def run_command(
         max_cost_usd=max_cost,
         replay_run_id=replay,
     )
+
+    settings = get_settings()
+    try:
+        validate_configured_models(settings)
+    except ValueError as exc:
+        console.print(
+            Panel.fit(
+                f"[bold red]Configuration Error:[/bold red]\n{exc}",
+                title="Model Validation Failed",
+            )
+        )
+        raise typer.Exit(code=1) from exc
 
     async def _execute():
         final_draft = ""

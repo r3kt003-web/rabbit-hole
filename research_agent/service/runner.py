@@ -9,7 +9,10 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from research_agent.config.settings import get_settings
+from research_agent.config.settings import (
+    get_settings,
+    validate_configured_models,
+)
 from research_agent.graph.builder import build_graph
 from research_agent.graph.state import ResearchState
 from research_agent.observability.metrics import (
@@ -65,6 +68,8 @@ async def run_research(
     Wraps the compiled graph and yields structured Events in real time for CLI, API (SSE), and UI.
     """
     settings = get_settings()
+    # Fast startup validation: fail early if configured model is unavailable
+    validate_configured_models(settings)
     options = options or ResearchOptions()
 
     actual_run_id = (
