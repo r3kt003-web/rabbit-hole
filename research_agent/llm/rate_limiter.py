@@ -136,14 +136,22 @@ async def call_with_rate_limit(
             return await coroutine_func(*args, **kwargs)
         except Exception as exc:
             err_text = str(exc).lower()
-            is_rate_limit = (
+            is_transient = (
                 "429" in err_text
                 or "resource_exhausted" in err_text
                 or "quota" in err_text
                 or "rate limit" in err_text
+                or "disconnected" in err_text
+                or "remoteprotocolerror" in err_text
+                or "connection error" in err_text
+                or "connecterror" in err_text
+                or "readtimeout" in err_text
+                or "503" in err_text
+                or "502" in err_text
+                or "504" in err_text
             )
 
-            if not is_rate_limit or attempt >= max_retries:
+            if not is_transient or attempt >= max_retries:
                 logger.error(
                     f"LLM call failed (attempt {attempt + 1}/{max_retries + 1}): {exc}"
                 )

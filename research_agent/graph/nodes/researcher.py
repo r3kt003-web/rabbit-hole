@@ -90,7 +90,7 @@ class ResearchWorker:
         settings = get_settings()
         self.search_tool = search_tool or SerperSearchTool()
         self.fetch_tool = fetch_tool or PageFetcher(
-            timeout=settings.worker_timeout_seconds
+            timeout=min(15.0, settings.worker_timeout_seconds)
         )
         self.model_name = model_name or settings.researcher_model
         self.timeout = settings.worker_timeout_seconds
