@@ -5,6 +5,7 @@ from .rate_limiter import (
     AsyncTokenBucketRateLimiter,
     call_with_rate_limit,
     get_rate_limiter,
+    reset_rate_limiter,
 )
 
 __all__ = [
@@ -13,4 +14,5 @@ __all__ = [
     "get_chat_model",
     "get_rate_limiter",
     "invoke_llm_with_cache",
+    "reset_rate_limiter",
 ]

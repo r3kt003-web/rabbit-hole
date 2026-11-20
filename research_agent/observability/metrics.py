@@ -94,6 +94,7 @@ class RunMetrics(BaseModel):
     number_of_searches: int = 0
     serper_cost_usd: float = 0.0
     number_of_pages_fetched: int = 0
+    number_of_llm_calls: int = 0
     total_latency_seconds: float = 0.0
     cost_per_cited_claim: float = 0.0
     remaining_daily_quota: int = 0
@@ -113,6 +114,7 @@ class RunMetrics(BaseModel):
             f"Total Latency:         {self.total_latency_seconds:.2f}s",
             f"Google Searches:       {self.number_of_searches} (${self.serper_cost_usd:.4f})",
             f"Pages Fetched:         {self.number_of_pages_fetched}",
+            f"LLM Calls:             {self.number_of_llm_calls}",
             f"Cost per Cited Claim:  ${self.cost_per_cited_claim:.5f}",
             f"Remaining Daily Quota: {self.remaining_daily_quota} requests",
             f"Budget Exceeded:       {self.budget_exceeded}",
@@ -149,10 +151,12 @@ def calculate_run_metrics(
     spans: list[Span],
     state: ResearchState | None = None,
     total_duration_seconds: float = 0.0,
+    rate_limiter: Any | None = None,
 ) -> RunMetrics:
     """Aggregates all spans and state into a comprehensive RunMetrics object."""
     calculator = get_cost_calculator()
-    rate_limiter = get_rate_limiter()
+    if rate_limiter is None:
+        rate_limiter = get_rate_limiter()
     settings = get_settings()
 
     total_input = 0
@@ -171,19 +175,30 @@ def calculate_run_metrics(
         total_input += inp
         total_output += out
 
+        # Determine span cost consistently
+        if s.cost_usd > 0.0:
+            span_cost = s.cost_usd
+        elif s.model_name:
+            span_cost = calculator.calculate_token_cost(s.model_name, inp, out)
+        elif "serper" in s.name.lower() or "search" in s.name.lower():
+            span_cost = calculator.calculate_serper_cost(1)
+        else:
+            span_cost = 0.0
+
         # Node grouping
         node_entry = node_tokens.setdefault(s.name, {"input": 0, "output": 0})
         node_entry["input"] += inp
         node_entry["output"] += out
-        node_cost[s.name] = node_cost.get(s.name, 0.0) + s.cost_usd
+        node_cost[s.name] = round(node_cost.get(s.name, 0.0) + span_cost, 6)
 
         # Model grouping
         if s.model_name:
             m_entry = model_tokens.setdefault(s.model_name, {"input": 0, "output": 0})
             m_entry["input"] += inp
             m_entry["output"] += out
-            m_cost = calculator.calculate_token_cost(s.model_name, inp, out)
-            model_cost[s.model_name] = model_cost.get(s.model_name, 0.0) + m_cost
+            model_cost[s.model_name] = round(
+                model_cost.get(s.model_name, 0.0) + span_cost, 6
+            )
 
         # Tool count
         if "serper" in s.name.lower() or "search" in s.name.lower():
@@ -194,8 +209,8 @@ def calculate_run_metrics(
     # Serper cost
     serper_cost = calculator.calculate_serper_cost(searches_count)
 
-    # Total cost = sum of model token costs + serper cost
-    total_cost = sum(model_cost.values()) + serper_cost
+    # Total cost = exact sum of node costs (guarantees per-node costs sum to total)
+    total_cost = round(sum(node_cost.values()), 6)
 
     # Number of cited claims
     num_claims = len(state.citations) if state and state.citations else 1
@@ -203,9 +218,19 @@ def calculate_run_metrics(
 
     budget_exceeded = total_cost > settings.max_run_cost_usd
 
+    # Count recorded LLM calls across all spans
+    llm_calls_count = sum(
+        1 for s in spans if s.model_name or s.span_type == "llm"
+    )
+    rate_limiter.daily_requests_count = max(
+        rate_limiter.daily_requests_count, llm_calls_count
+    )
+
+    remaining_daily_quota = max(0, rate_limiter.rpd - rate_limiter.daily_requests_count)
+
     metrics = RunMetrics(
         run_id=run_id,
-        total_cost_usd=round(total_cost, 6),
+        total_cost_usd=total_cost,
         total_tokens=total_input + total_output,
         total_input_tokens=total_input,
         total_output_tokens=total_output,
@@ -216,9 +241,10 @@ def calculate_run_metrics(
         number_of_searches=searches_count,
         serper_cost_usd=serper_cost,
         number_of_pages_fetched=pages_count,
+        number_of_llm_calls=llm_calls_count,
         total_latency_seconds=round(total_duration_seconds, 2),
         cost_per_cited_claim=cost_per_claim,
-        remaining_daily_quota=rate_limiter.remaining_daily_quota,
+        remaining_daily_quota=remaining_daily_quota,
         budget_exceeded=budget_exceeded,
     )
 

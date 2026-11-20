@@ -47,6 +47,13 @@ class AsyncTokenBucketRateLimiter:
             self.day_start = now
             self.daily_requests_count = 0
 
+    def reset(self) -> None:
+        """Resets daily request count and tokens to initial capacity."""
+        self.day_start = time.time()
+        self.daily_requests_count = 0
+        self.tokens = float(self.rpm)
+        self.last_update = time.monotonic()
+
     @property
     def remaining_daily_quota(self) -> int:
         self._reset_daily_if_needed()
@@ -90,6 +97,12 @@ def get_rate_limiter() -> AsyncTokenBucketRateLimiter:
     if _global_limiter is None:
         _global_limiter = AsyncTokenBucketRateLimiter()
     return _global_limiter
+
+
+def reset_rate_limiter() -> None:
+    """Resets the singleton global rate limiter."""
+    if _global_limiter is not None:
+        _global_limiter.reset()
 
 
 def parse_retry_after(error_str: str) -> float | None:
