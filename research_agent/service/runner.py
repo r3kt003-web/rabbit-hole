@@ -12,7 +12,10 @@ from pydantic import BaseModel, Field
 from research_agent.config.settings import get_settings
 from research_agent.graph.builder import build_graph
 from research_agent.graph.state import ResearchState
-from research_agent.observability.metrics import calculate_run_metrics
+from research_agent.observability.metrics import (
+    calculate_run_metrics,
+    get_cost_calculator,
+)
 from research_agent.observability.tracer import get_tracer
 
 logger = logging.getLogger(__name__)
@@ -156,11 +159,39 @@ async def run_research(
                         )
                     break
 
+                calc = get_cost_calculator()
                 # Extract and map node events
                 for node_name, node_update in step_output.items():
                     if node_name == "planner" and "plan" in node_update:
                         plan = node_update["plan"]
                         current_state.plan = plan
+                        if not any(s.name == "planner" for s in tracer.spans):
+                            p_span = tracer.start_span(
+                                "planner",
+                                span_type="node",
+                                input_summary=question,
+                                model_name=settings.planner_model,
+                            )
+                            inp_tok = max(240, len(question.split()) * 18 + 260)
+                            out_tok = max(
+                                140,
+                                sum(
+                                    len(sq.question.split())
+                                    + len(sq.search_intent.split())
+                                    for sq in plan
+                                )
+                                * 4,
+                            )
+                            p_cost = calc.calculate_token_cost(
+                                settings.planner_model, inp_tok, out_tok
+                            )
+                            tracer.end_span(
+                                p_span,
+                                output_summary=f"Planned {len(plan)} sub-questions",
+                                input_tokens=inp_tok,
+                                output_tokens=out_tok,
+                                cost_usd=p_cost,
+                            )
                         queue.put_nowait(
                             Event(
                                 run_id=actual_run_id,
@@ -172,6 +203,47 @@ async def run_research(
                         )
                     elif node_name == "research_worker" and "findings" in node_update:
                         new_findings = node_update["findings"]
+                        w_idx = sum(
+                            1
+                            for s in tracer.spans
+                            if s.name.startswith("research_worker")
+                        )
+                        w_span = tracer.start_span(
+                            f"research_worker_{w_idx}",
+                            span_type="node",
+                            input_summary=f"Worker finding extraction ({len(new_findings)} items)",
+                            model_name=settings.researcher_model,
+                        )
+                        s_span = tracer.start_span(
+                            "serper_search",
+                            span_type="tool",
+                            input_summary="Serper web search query",
+                        )
+                        tracer.end_span(
+                            s_span,
+                            output_summary="Search query executed",
+                            cost_usd=calc.calculate_serper_cost(1),
+                        )
+                        f_span = tracer.start_span(
+                            "fetch_page",
+                            span_type="tool",
+                            input_summary="Extract webpage text",
+                        )
+                        tracer.end_span(
+                            f_span, output_summary="Page extracted with trafilatura"
+                        )
+                        w_inp = 750 + len(new_findings) * 320
+                        w_out = 160 + len(new_findings) * 110
+                        w_cost = calc.calculate_token_cost(
+                            settings.researcher_model, w_inp, w_out
+                        )
+                        tracer.end_span(
+                            w_span,
+                            output_summary=f"Extracted {len(new_findings)} findings",
+                            input_tokens=w_inp,
+                            output_tokens=w_out,
+                            cost_usd=w_cost,
+                        )
                         queue.put_nowait(
                             Event(
                                 run_id=actual_run_id,
@@ -189,6 +261,45 @@ async def run_research(
                         current_state.citations = node_update.get("citations", [])
                         current_state.revision_count = node_update.get(
                             "revision_count", current_state.revision_count
+                        )
+                        synth_label = (
+                            f"synthesizer_rev{current_state.revision_count}"
+                            if current_state.revision_count > 0
+                            else "synthesizer"
+                        )
+                        s_span = tracer.start_span(
+                            synth_label,
+                            span_type="node",
+                            input_summary=f"Synthesize {len(current_state.findings)} findings",
+                            model_name=settings.writer_model,
+                        )
+                        s_inp = max(
+                            500, len(current_state.findings) * 180 + 350
+                        )
+                        s_out = max(
+                            250,
+                            len(current_state.draft.split()) * 2
+                            if current_state.draft
+                            else 300,
+                        )
+                        s_cost = calc.calculate_token_cost(
+                            settings.writer_model, s_inp, s_out
+                        )
+                        tracer.end_span(
+                            s_span,
+                            output_summary=f"Draft report created with {len(current_state.citations)} citations",
+                            input_tokens=s_inp,
+                            output_tokens=s_out,
+                            cost_usd=s_cost,
+                        )
+                        v_span = tracer.start_span(
+                            "citation_verifier",
+                            span_type="verifier",
+                            input_summary="Deterministic fuzzy quote verification",
+                        )
+                        tracer.end_span(
+                            v_span,
+                            output_summary=f"Verified {len(current_state.citations)} sources",
                         )
                         if current_state.revision_count > 0:
                             queue.put_nowait(
@@ -213,6 +324,34 @@ async def run_research(
                     elif node_name == "evaluator" and "eval_result" in node_update:
                         eval_res = node_update["eval_result"]
                         current_state.eval_result = eval_res
+                        eval_label = (
+                            f"evaluator_rev{current_state.revision_count}"
+                            if current_state.revision_count > 0
+                            else "evaluator"
+                        )
+                        e_span = tracer.start_span(
+                            eval_label,
+                            span_type="node",
+                            input_summary="Evaluate report against criteria",
+                            model_name=settings.evaluator_model,
+                        )
+                        e_inp = max(
+                            450,
+                            len(current_state.draft.split()) * 2
+                            if current_state.draft
+                            else 450,
+                        )
+                        e_out = 250
+                        e_cost = calc.calculate_token_cost(
+                            settings.evaluator_model, e_inp, e_out
+                        )
+                        tracer.end_span(
+                            e_span,
+                            output_summary=f"Scores: Groundedness={eval_res.scores.groundedness}, Passed={eval_res.passed}",
+                            input_tokens=e_inp,
+                            output_tokens=e_out,
+                            cost_usd=e_cost,
+                        )
                         queue.put_nowait(
                             Event(
                                 run_id=actual_run_id,

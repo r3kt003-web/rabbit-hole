@@ -1,7 +1,7 @@
 [project]
-name = "autonomus-research-agent"
+name = "autonomous-research-agent"
 version = "0.1.0"
-description = "Add your description here"
+description = "Autonomous Deep Research Agent with LangGraph, Google Gemini, and Serper web search"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -20,7 +20,10 @@ dependencies = [
 ]
 
 [project.scripts]
-agent = "research_agent.cli:main"
+agent = "research_agent.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["research_agent*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

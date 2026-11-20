@@ -5,7 +5,10 @@ def test_settings_defaults(monkeypatch):
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     monkeypatch.delenv("SERPER_API_KEY", raising=False)
     monkeypatch.delenv("PLANNER_MODEL", raising=False)
+    monkeypatch.delenv("RESEARCHER_MODEL", raising=False)
     monkeypatch.delenv("MAX_REVISIONS", raising=False)
+    monkeypatch.delenv("CONCURRENCY_LIMIT", raising=False)
+    monkeypatch.delenv("WORKER_TIMEOUT_SECONDS", raising=False)
 
     settings = Settings()
     assert settings.planner_model == "gemini-2.5-flash"

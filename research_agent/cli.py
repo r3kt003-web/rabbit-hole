@@ -15,6 +15,7 @@ cli_app = typer.Typer(
     name="agent",
     help="Autonomous Research Agent CLI: Run deep autonomous research, view traces, and inspect metrics.",
 )
+app = cli_app
 console = Console()
 
 
