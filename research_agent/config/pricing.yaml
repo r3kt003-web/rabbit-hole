@@ -1,0 +1,38 @@
+# Pricing table per 1,000,000 tokens (USD)
+models:
+  gemini-2.5-flash-lite:
+    input_cost_per_million: 0.10
+    output_cost_per_million: 0.40
+  gemini-2.5-flash:
+    input_cost_per_million: 0.15
+    output_cost_per_million: 0.60
+  gemini-3.8-flash:
+    input_cost_per_million: 0.15
+    output_cost_per_million: 0.60
+  gemini-2.0-flash-lite:
+    input_cost_per_million: 0.075
+    output_cost_per_million: 0.30
+  gemini-2.0-flash:
+    input_cost_per_million: 0.10
+    output_cost_per_million: 0.40
+  gemini-2.0-flash-exp:
+    input_cost_per_million: 0.10
+    output_cost_per_million: 0.40
+  gemini-1.5-flash-8b:
+    input_cost_per_million: 0.0375
+    output_cost_per_million: 0.15
+  gemini-1.5-flash:
+    input_cost_per_million: 0.075
+    output_cost_per_million: 0.30
+  gemini-1.5-pro:
+    input_cost_per_million: 1.25
+    output_cost_per_million: 5.00
+  gemini-2.5-flash:
+    input_cost_per_million: 0.15
+    output_cost_per_million: 0.60
+  default:
+    input_cost_per_million: 0.10
+    output_cost_per_million: 0.40
+
+serper:
+  cost_per_call: 0.001
