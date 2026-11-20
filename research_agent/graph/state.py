@@ -73,6 +73,13 @@ class Citation(BaseModel):
     verified: bool = Field(
         default=True, description="Whether citation verification passed"
     )
+    status: str = Field(
+        default="verified",
+        description="Verification status: verified, quote_not_found, unsupported_figure, unresolved_source",
+    )
+    matched_span: str | None = Field(
+        default=None, description="The matched text span from the source"
+    )
     verification_error: str | None = Field(
         default=None, description="Error reason if verification failed"
     )

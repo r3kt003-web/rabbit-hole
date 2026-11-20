@@ -61,7 +61,14 @@ class Settings(BaseModel):
         default_factory=lambda: float(os.getenv("SERPER_PRICE_PER_CALL", "0.001"))
     )
     citation_fuzzy_threshold: float = Field(
-        default_factory=lambda: float(os.getenv("CITATION_FUZZY_THRESHOLD", "0.7"))
+        default_factory=lambda: float(
+            os.getenv("VERIFY_QUOTE_THRESHOLD", os.getenv("CITATION_FUZZY_THRESHOLD", "0.85"))
+        )
+    )
+    verify_quote_threshold: float = Field(
+        default_factory=lambda: float(
+            os.getenv("VERIFY_QUOTE_THRESHOLD", os.getenv("CITATION_FUZZY_THRESHOLD", "0.85"))
+        )
     )
     pass_threshold: float = Field(
         default_factory=lambda: float(os.getenv("PASS_THRESHOLD", "3.5"))

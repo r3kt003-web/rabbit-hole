@@ -9,7 +9,7 @@ Given a research prompt, the agent autonomously plans sub-questions, executes pa
 ## Key Features
 
 - **LangGraph State Machine Orchestration**: Fan-out execution using LangGraph's dynamic `Send` API with state deduplication reducers.
-- **Deterministic Citation Verification**: Verifies source resolution and checks cited quotes against retrieved webpage text using fuzzy sequence matching (`difflib.SequenceMatcher`, threshold `0.70`) *before* evaluation—reducing citation hallucination risks.
+- **Deterministic Citation Verification**: Verifies source resolution, checks quotes using normalized windowed fuzzy matching (`rapidfuzz`, configurable `VERIFY_QUOTE_THRESHOLD=0.85`), and enforces a deterministic entailment guard for all figures/numbers *before* LLM evaluation.
 - **Evaluator & Conditional Revision Loop**: Multi-dimensional grading across *Groundedness*, *Coverage*, *Citation Accuracy*, and *Clarity* with automated routing back to missing research or report synthesis up to a configurable revision ceiling (`MAX_REVISIONS`).
 - **Configurable Rate Limiting**: Shared async token bucket rate limiter (`LLM_RPM`, `LLM_RPD`) with jittered exponential backoff on HTTP 429 status codes.
 - **Two-Tier Disk Caching**: Query and extracted HTML content indexed with SHA-256 hashing to enable zero-cost repeated queries during development when cache hits occur.
@@ -108,8 +108,12 @@ flowchart TD
 
 ## Design Decisions & Engineering Rationale
 
-1. **Deterministic Citation Verification Before LLM Evaluation**:
-   LLMs can struggle with self-verification and citation faithfulness. Rather than relying solely on the LLM to grade its own output, `research_agent/verification/citations.py` parses all numeric references `[n]`, maps them to the source manifest, and performs fuzzy sequence matching (`difflib.SequenceMatcher(ratio >= 0.70)`) against the scraped page text. While this verifies quote presence rather than proving semantic entailment, it reliably catches fabricated sources and phantom citations before the evaluator scores the draft.
+1. **Hardened Deterministic Citation Verification (`citations.py`)**:
+   LLMs can struggle with self-verification and citation faithfulness. Rather than relying on the LLM to grade its own output, `research_agent/verification/citations.py` evaluates citations deterministically before the evaluator scores the draft:
+   - **Text Normalization & Fuzzy Matching**: Normalizes unicode, typographic smart quotes, and whitespace across quotes and source text, evaluating matches with `rapidfuzz` windowed partial ratio alignment (`VERIFY_QUOTE_THRESHOLD`, default `0.85`).
+   - **Deterministic Entailment Guard**: Parses every number, percentage, currency figure, and year in a claim and checks that it appears in the cited quote or source content; mismatches are flagged as `unsupported_figure`.
+   - **Structured Status Outputs**: Emits granular statuses per citation: `verified`, `quote_not_found`, `unsupported_figure`, or `unresolved_source`, along with the exact matched span.
+   - **Precise Verification Scope**: The verifier catches fabricated sources, missing quotes, and altered or hallucinatory numbers/metrics. It does **not** prove general semantic entailment (e.g. subtle semantic negation or paraphrasing that changes meaning without altering figures).
 
 2. **Configurable Token Bucket Rate Limiter (`rate_limiter.py`)**:
    Free-tier Gemini quotas vary across tiers, accounts, and regions (check your specific account quotas in Google AI Studio). To protect against rate-limit errors and request thrashing, all LLM calls route through a singleton `AsyncTokenBucketRateLimiter` using configurable limits (`LLM_RPM=8`, `LLM_RPD=200` by default). When rate limits occur, requests apply exponential backoff with jitter and honor upstream `retry-after` headers.
