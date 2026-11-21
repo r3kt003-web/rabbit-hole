@@ -100,15 +100,6 @@ flowchart TD
     Route -->|Synthesis or Grounding Issues| Synthesizer
 ```
 
----
-
-## Sample Run Output
-
-> **[TODO: Task 6 Real Sample Run]**
-> Real run output will be recorded from a verified live execution and committed under `docs/sample_run/`. Fabricated or estimated run traces are omitted to maintain factual precision.
-
----
-
 ## Design Decisions & Engineering Rationale
 
 1. **Hardened Deterministic Citation Verification (`citations.py`)**:
