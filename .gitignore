@@ -38,6 +38,7 @@ runs/
 # Testing & Linting
 .pytest_cache/
 .ruff_cache/
+.tmp_test/
 htmlcov/
 .coverage
 .coverage.*
