@@ -50,3 +50,8 @@ htmlcov/
 *.swo
 .DS_Store
 Thumbs.db
+
+#prompt files
+PROJECT_SPEC.md
+project_spec.md
+github_spec.md
