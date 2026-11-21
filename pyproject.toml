@@ -3,6 +3,7 @@ name = "autonomous-research-agent"
 version = "0.1.0"
 description = "Autonomous Deep Research Agent with LangGraph, Google Gemini, and Serper web search"
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.165.0",

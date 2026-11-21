@@ -138,8 +138,8 @@ flowchart TD
 
 ## Testing Strategy & Mocks
 
-The test suite contains **54 collected tests**:
-- **53 Offline Unit & Boundary Tests**: Run completely offline without requiring active API keys or network access.
+The test suite contains **66 collected tests**:
+- **65 Offline Unit & Boundary Tests**: Run completely offline without requiring active API keys or network access.
   - **`MOCK_LLM`**: Structured Pydantic responses simulate planner decomposition, worker extraction, draft synthesis, and evaluator scoring.
   - **`MOCK_SERPER`**: Mock HTTP transport simulates Serper responses with realistic search result items.
   - **`MOCK_FETCH`**: Injected mock HTTP payloads simulate extracted HTML content and edge cases (404s, timeouts, empty bodies).
@@ -301,6 +301,8 @@ streamlit run research_agent/ui/app.py
 - Open `http://localhost:8501`
 - Enter your research topic, configure revision limits, and watch live SSE events stream the plan, worker findings, citation verification, evaluation scores, and final markdown report.
 
+![Streamlit Web Interface](docs/ui_screenshot.png)
+
 ### 4. Running Tests & Linters
 
 The test suite and code quality checks run automatically on GitHub Actions CI across both **Python 3.11** and **Python 3.13** on every push and pull request to `main`.
@@ -319,6 +321,14 @@ ruff check .
 
 ## Known Limitations
 
+- **Quote-Level vs. Semantic Verification**: The deterministic citation verification pipeline checks URL resolution, validates quote occurrences against source text using normalized windowed fuzzy alignment (`rapidfuzz`), and deterministically guards against unsupported numbers, percentages, currency, and dates. It does **not** evaluate semantic entailment, tone, or nuanced changes in meaning that may occur when claims are paraphrased.
+- **Free-Tier Throughput & Rate Limits**: When operating under Google AI Studio free-tier quotas (e.g. 8–15 RPM and 200–1,500 RPD depending on model and region), parallel research workers and multi-pass revision loops are paced by the token bucket rate limiter and exponential backoff, resulting in lower request throughput and higher end-to-end latency compared to paid API tiers.
 - **Single-Process Run State**: Run metadata and active queues are maintained in process memory (along with `./runs` on disk). For multi-replica production scaling, state persistence should be migrated to PostgreSQL and event broadcasting to Redis Pub/Sub.
 - **Client-Rendered JavaScript**: The page extraction pipeline uses `trafilatura` for fast, lightweight HTML-to-text conversion. Single-page applications requiring heavy client-side JavaScript execution (e.g. React/Vue SPAs without SSR) may yield limited body text compared to a headless browser like Playwright.
 - **Serper Free-Tier Limits**: Free Serper API keys provide 2,500 lifetime queries; production deployments with high volume should configure paid tier credits.
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
